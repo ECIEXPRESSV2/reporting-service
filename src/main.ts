@@ -1,6 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { StructuredLogger } from './common/logger/structured.logger';
+import { setupAppInsights } from './common/telemetry/app-insights';
 import { execSync, exec } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -76,7 +78,13 @@ process.on('SIGINT', () => {
 });
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // Inicializa Application Insights antes de crear la app para que el SDK pueda
+  // instrumentar HTTP/dependencias. No-op si no hay connection string (local).
+  setupAppInsights();
+
+  const app = await NestFactory.create(AppModule, {
+    logger: new StructuredLogger(),
+  });
 
   const config = new DocumentBuilder()
     .setTitle('Reporting Service')
