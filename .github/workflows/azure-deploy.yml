@@ -1,14 +1,10 @@
 # ═════════════════════════════════════════════════════════════════════════════
-# Despliegue a Azure Container Apps — eciexpress-prod-reporting
+# Pipeline CI/CD — eciexpress-prod-reporting (reporting-service, event-driven, sin DB)
+# Flujo: build -> test -> deploy. En push a main se compila, se corren los tests y,
+# si pasan, se construye la imagen, se sube al ACR y se actualiza el Container App.
 #
-# reporting es event-driven y NO tiene base de datos (INVENTARIO §7), por eso este
-# workflow NO tiene paso de migraciones. Build de la imagen en el ACR + update del
-# Container App al hacer push a main.
-#
-# Requisitos (ver INFRA_RESUMEN §Bootstrap):
-#   - Infra aplicada (ACR + Container App eciexpress-prod-reporting).
-#   - GitHub Secrets del repo: AZURE_CLIENT_ID, AZURE_TENANT_ID,
-#     AZURE_SUBSCRIPTION_ID, ACR_NAME.
+# Requisitos (GitHub Secrets): AZURE_CLIENT_ID, AZURE_TENANT_ID,
+# AZURE_SUBSCRIPTION_ID, ACR_NAME.
 # ═════════════════════════════════════════════════════════════════════════════
 name: azure-deploy
 
@@ -27,8 +23,56 @@ env:
   RESOURCE_GROUP: eciexpress-prod-rg
 
 jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+  test:
+    name: test
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: pnpm run test
+
   deploy:
-    name: build (ACR) -> update Container App
+    name: deploy
+    needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     environment: production
@@ -52,11 +96,15 @@ jobs:
           docker push "${{ secrets.ACR_NAME }}.azurecr.io/${IMAGE_NAME}:production"
 
       - name: Update Container App image
+        # --revision-suffix fuerza una revisión nueva aunque el tag de imagen
+        # (":production") no cambie de nombre: sin esto, ACA compara el spec,
+        # ve el mismo string de imagen y no crea revisión ni vuelve a hacer pull.
         run: |
           az containerapp update \
             --name "${CONTAINER_APP}" \
             --resource-group "${RESOURCE_GROUP}" \
-            --image "${{ secrets.ACR_NAME }}.azurecr.io/${IMAGE_NAME}:production"
+            --image "${{ secrets.ACR_NAME }}.azurecr.io/${IMAGE_NAME}:production" \
+            --revision-suffix "${GITHUB_SHA::7}-${GITHUB_RUN_NUMBER}"
 
       - name: Cleanup old untagged images
         # ACR Tasks (az acr run / acr purge) está bloqueado en esta suscripción
