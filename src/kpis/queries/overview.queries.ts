@@ -6,28 +6,31 @@
  * concatenando strings al KQL. Esto evita inyección de KQL y consultas de costo abierto.
  * Cualquier KPI nuevo se agrega aquí como constante allowlisted.
  *
- * Se consultan las tablas clásicas de App Insights (queryResource sobre el recurso).
+ * Se consulta el Log Analytics workspace (App Insights es workspace-based), así que se
+ * usan las tablas de esquema workspace (AppRequests, AppExceptions, …) y AppRoleName
+ * como identificador de servicio (equivalen a requests/exceptions/cloud_RoleName del
+ * esquema clásico).
  */
 
 // Totales globales de peticiones: volumen, fallos y latencias p50/p95.
 export const OVERVIEW_TOTALS = `
-requests
+AppRequests
 | summarize
     totalRequests = count(),
-    failedRequests = countif(success == false),
-    p50Ms = round(percentile(duration, 50), 1),
-    p95Ms = round(percentile(duration, 95), 1)
+    failedRequests = countif(Success == false),
+    p50Ms = round(percentile(DurationMs, 50), 1),
+    p95Ms = round(percentile(DurationMs, 95), 1)
 `;
 
-// Desglose por microservicio (cloud_RoleName = SERVICE_NAME): volumen, fallos,
+// Desglose por microservicio (AppRoleName = SERVICE_NAME): volumen, fallos,
 // tasa de error y p95. Ordenado por volumen.
 export const OVERVIEW_BY_SERVICE = `
-requests
+AppRequests
 | summarize
     requests = count(),
-    failed = countif(success == false),
-    p95Ms = round(percentile(duration, 95), 1)
-    by service = tostring(cloud_RoleName)
+    failed = countif(Success == false),
+    p95Ms = round(percentile(DurationMs, 95), 1)
+    by service = tostring(AppRoleName)
 | extend errorRatePct = round(iff(requests == 0, 0.0, 100.0 * failed / requests), 2)
 | project service, requests, failed, errorRatePct, p95Ms
 | order by requests desc
@@ -35,9 +38,9 @@ requests
 
 // Top de excepciones por tipo y servicio, con un mensaje de muestra.
 export const OVERVIEW_TOP_EXCEPTIONS = `
-exceptions
-| summarize count = count(), sampleMessage = any(outerMessage)
-    by type = tostring(type), service = tostring(cloud_RoleName)
+AppExceptions
+| summarize count = count(), sampleMessage = any(OuterMessage)
+    by type = tostring(ExceptionType), service = tostring(AppRoleName)
 | project service, type, count, sampleMessage
 | order by count desc
 | take 10
