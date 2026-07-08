@@ -10,29 +10,31 @@ export type KqlRow = Record<string, unknown>;
 
 /**
  * Envuelve el SDK de Azure Monitor Query para correr KQL contra la telemetría de
- * Application Insights (tablas clásicas: requests, dependencies, exceptions, traces,
- * customEvents, customMetrics).
+ * Application Insights, que al ser workspace-based vive en el Log Analytics workspace
+ * (tablas de esquema workspace: AppRequests, AppDependencies, AppExceptions, AppTraces,
+ * AppEvents, AppMetrics; el rol del servicio es AppRoleName).
  *
  * Autenticación passwordless: DefaultAzureCredential toma la Managed Identity de
  * usuario compartida (AZURE_CLIENT_ID la fuerza a esa MID). En Azure necesita el rol
- * "Monitoring Reader" sobre el recurso App Insights (ver Terraform
- * azurerm_role_assignment.monitoring_reader).
+ * "Log Analytics Reader" sobre el workspace (ver Terraform
+ * azurerm_role_assignment.log_analytics_reader).
  *
- * Se consulta el RECURSO App Insights por su resourceId (queryResource), no el
- * workspace, para conservar los nombres de tabla clásicos y que el KQL sea portable
- * al portal de Azure.
+ * Se consulta el WORKSPACE por su GUID (customerId, LOG_ANALYTICS_WORKSPACE_ID) con
+ * queryWorkspace. Antes se intentó queryResource contra el componente App Insights,
+ * pero la MID recibía 403: el data action de query resuelve contra el workspace, así
+ * que el rol y la consulta deben ser a nivel de workspace.
  *
- * Si APPLICATIONINSIGHTS_RESOURCE_ID no está presente (local/tests), queda deshabilitado
+ * Si LOG_ANALYTICS_WORKSPACE_ID no está presente (local/tests), queda deshabilitado
  * y devuelve [] en vez de romper el arranque, igual que setupAppInsights().
  */
 @Injectable()
 export class AzureMonitorService {
   private readonly logger = new Logger(AzureMonitorService.name);
-  private readonly resourceId = process.env.APPLICATIONINSIGHTS_RESOURCE_ID;
+  private readonly workspaceId = process.env.LOG_ANALYTICS_WORKSPACE_ID;
   private client?: LogsQueryClient;
 
   get enabled(): boolean {
-    return Boolean(this.resourceId);
+    return Boolean(this.workspaceId);
   }
 
   private getClient(): LogsQueryClient {
@@ -50,14 +52,14 @@ export class AzureMonitorService {
    * en el KQL). Lanza si la consulta falla; el llamador decide si tolerarlo.
    */
   async query(kql: string, hours = 24): Promise<KqlRow[]> {
-    if (!this.resourceId) {
+    if (!this.workspaceId) {
       this.logger.warn(
-        'APPLICATIONINSIGHTS_RESOURCE_ID no configurado; devolviendo [] (KQL deshabilitado en local).',
+        'LOG_ANALYTICS_WORKSPACE_ID no configurado; devolviendo [] (KQL deshabilitado en local).',
       );
       return [];
     }
 
-    const result = await this.getClient().queryResource(this.resourceId, kql, {
+    const result = await this.getClient().queryWorkspace(this.workspaceId, kql, {
       duration: `PT${hours}H`,
     });
 
