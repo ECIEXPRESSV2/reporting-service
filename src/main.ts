@@ -20,9 +20,14 @@ function isBrowserRunning(): boolean {
         stdio: ['ignore', 'pipe', 'ignore'],
         windowsHide: true,
       });
-      return /chrome\.exe|msedge\.exe|firefox\.exe|brave\.exe|opera\.exe/i.test(out);
+      return /chrome\.exe|msedge\.exe|firefox\.exe|brave\.exe|opera\.exe/i.test(
+        out,
+      );
     }
-    const out = execSync('ps aux', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const out = execSync('ps aux', {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
     return /Google Chrome|Safari|firefox|Brave Browser|Chromium/i.test(out);
   } catch {
     return false;
@@ -55,7 +60,11 @@ function openSwaggerIfBrowserOpen(url: string): void {
 
   if (!isBrowserRunning()) return;
 
-  fs.writeFileSync(LOCK_FILE, JSON.stringify({ timestamp: Date.now() }), 'utf-8');
+  fs.writeFileSync(
+    LOCK_FILE,
+    JSON.stringify({ timestamp: Date.now() }),
+    'utf-8',
+  );
   openBrowser(url);
 }
 
