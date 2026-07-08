@@ -43,7 +43,8 @@ export class StructuredLogger implements LoggerService {
       message: typeof message === 'object' ? message : String(message),
       ...(trace && { trace }),
     };
-    const out = level === 'error' || level === 'fatal' ? process.stderr : process.stdout;
+    const out =
+      level === 'error' || level === 'fatal' ? process.stderr : process.stdout;
     out.write(JSON.stringify(entry) + '\n');
 
     this.toAppInsights(level, message, context, userId, trace);
@@ -65,41 +66,49 @@ export class StructuredLogger implements LoggerService {
     if (trace) properties.trace = trace;
 
     client.trackTrace({
-      message: typeof message === 'object' ? JSON.stringify(message) : String(message),
+      message:
+        typeof message === 'object' ? JSON.stringify(message) : String(message),
       severity: SEVERITY[level] ?? Contracts.SeverityLevel.Information,
       properties,
     });
   }
 
   log(message: unknown, ...optionalParams: unknown[]): void {
-    const context = typeof optionalParams[0] === 'string' ? optionalParams[0] : undefined;
+    const context =
+      typeof optionalParams[0] === 'string' ? optionalParams[0] : undefined;
     this.write('info', message, context);
   }
 
   error(message: unknown, ...optionalParams: unknown[]): void {
     // NestJS llama error(message, stack?, context?)
-    const trace = typeof optionalParams[0] === 'string' ? optionalParams[0] : undefined;
-    const context = typeof optionalParams[1] === 'string' ? optionalParams[1] : undefined;
+    const trace =
+      typeof optionalParams[0] === 'string' ? optionalParams[0] : undefined;
+    const context =
+      typeof optionalParams[1] === 'string' ? optionalParams[1] : undefined;
     this.write('error', message, context, trace);
   }
 
   warn(message: unknown, ...optionalParams: unknown[]): void {
-    const context = typeof optionalParams[0] === 'string' ? optionalParams[0] : undefined;
+    const context =
+      typeof optionalParams[0] === 'string' ? optionalParams[0] : undefined;
     this.write('warn', message, context);
   }
 
   debug(message: unknown, ...optionalParams: unknown[]): void {
-    const context = typeof optionalParams[0] === 'string' ? optionalParams[0] : undefined;
+    const context =
+      typeof optionalParams[0] === 'string' ? optionalParams[0] : undefined;
     this.write('debug', message, context);
   }
 
   verbose(message: unknown, ...optionalParams: unknown[]): void {
-    const context = typeof optionalParams[0] === 'string' ? optionalParams[0] : undefined;
+    const context =
+      typeof optionalParams[0] === 'string' ? optionalParams[0] : undefined;
     this.write('verbose', message, context);
   }
 
   fatal(message: unknown, ...optionalParams: unknown[]): void {
-    const context = typeof optionalParams[0] === 'string' ? optionalParams[0] : undefined;
+    const context =
+      typeof optionalParams[0] === 'string' ? optionalParams[0] : undefined;
     this.write('fatal', message, context);
   }
 
