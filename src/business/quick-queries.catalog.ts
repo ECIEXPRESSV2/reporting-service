@@ -107,7 +107,7 @@ export const QUICK_QUERIES: QuickQuery[] = [
     db: 'financial',
     params: [],
     sql: `
-      SELECT coalesce(failure_reason, 'DESCONOCIDA') AS razon,
+      SELECT coalesce(failure_reason::text, 'DESCONOCIDA') AS razon,
              count(*)::int AS pedidos
       FROM order_transactions
       WHERE status = 'FAILED'
