@@ -36,6 +36,21 @@ AppRequests
 | order by requests desc
 `;
 
+// Serie de latencia PROMEDIO por minuto y por servicio (para las tarjetas de salud —valor del
+// minuto actual— y la gráfica del popup). Incluye el conteo de peticiones del minuto. La ventana
+// se aplica por el timespan del SDK (queryMinutes), no en el KQL.
+export const LATENCY_TIMESERIES = `
+AppRequests
+| summarize
+    avgMs = round(avg(DurationMs), 1),
+    p95Ms = round(percentile(DurationMs, 95), 1),
+    p99Ms = round(percentile(DurationMs, 99), 1),
+    requests = count()
+    by bin(TimeGenerated, 1m), service = tostring(AppRoleName)
+| project timestamp = TimeGenerated, service, avgMs, p95Ms, p99Ms, requests
+| order by timestamp asc
+`;
+
 // Top de excepciones por tipo y servicio, con un mensaje de muestra.
 export const OVERVIEW_TOP_EXCEPTIONS = `
 AppExceptions

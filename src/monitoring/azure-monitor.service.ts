@@ -52,6 +52,15 @@ export class AzureMonitorService {
    * en el KQL). Lanza si la consulta falla; el llamador decide si tolerarlo.
    */
   async query(kql: string, hours = 24): Promise<KqlRow[]> {
+    return this.run(kql, `PT${hours}H`);
+  }
+
+  /** Igual que `query` pero con ventana en MINUTOS (para series de latencia por minuto). */
+  async queryMinutes(kql: string, minutes: number): Promise<KqlRow[]> {
+    return this.run(kql, `PT${Math.max(1, Math.round(minutes))}M`);
+  }
+
+  private async run(kql: string, isoDuration: string): Promise<KqlRow[]> {
     if (!this.workspaceId) {
       this.logger.warn(
         'LOG_ANALYTICS_WORKSPACE_ID no configurado; devolviendo [] (KQL deshabilitado en local).',
@@ -60,7 +69,7 @@ export class AzureMonitorService {
     }
 
     const result = await this.getClient().queryWorkspace(this.workspaceId, kql, {
-      duration: `PT${hours}H`,
+      duration: isoDuration,
     });
 
     if (result.status !== LogsQueryResultStatus.Success) {
