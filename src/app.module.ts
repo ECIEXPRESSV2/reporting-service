@@ -3,9 +3,11 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { LoggingMiddleware } from './common/logger/logging.middleware';
 import { KpisModule } from './kpis/kpis.module';
+import { BusinessModule } from './business/business.module';
+import { InfraModule } from './deploy/infra.module';
 
 @Module({
-  imports: [KpisModule],
+  imports: [KpisModule, BusinessModule, InfraModule],
   controllers: [AppController],
   providers: [AppService],
 })
