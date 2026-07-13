@@ -4,10 +4,43 @@ import {
   type KqlRow,
 } from '../monitoring/azure-monitor.service';
 import {
+  LATENCY_TIMESERIES,
   OVERVIEW_BY_SERVICE,
   OVERVIEW_TOP_EXCEPTIONS,
   OVERVIEW_TOTALS,
 } from './queries/overview.queries';
+import {
+  EVENTS_FAILED,
+  EVENTS_PUBLISHED,
+  EVENTS_RECEIVED,
+} from './queries/events.queries';
+
+export interface LatencyPoint {
+  timestamp: string;
+  service: string;
+  avgMs: number;
+  p95Ms: number;
+  p99Ms: number;
+  requests: number;
+}
+
+export interface LatencyResponse {
+  minutes: number;
+  generatedAt: string;
+  /** false en local/tests (sin App Insights): points viene vacío. */
+  enabled: boolean;
+  points: LatencyPoint[];
+}
+
+export interface EventFlowResponse {
+  minutes: number;
+  generatedAt: string;
+  enabled: boolean;
+  /** Eventos generados/recibidos: [{ service, routingKey, eventos }]. Fallidos: [{ service, tipo, fallos, muestra }]. */
+  published: KqlRow[];
+  received: KqlRow[];
+  failed: KqlRow[];
+}
 
 export interface OverviewTotals {
   totalRequests: number;
@@ -55,6 +88,52 @@ export class KpisService {
       totals: this.shapeTotals(this.unwrap(totalsRes, 'totals')),
       services: this.unwrap(servicesRes, 'services'),
       topExceptions: this.unwrap(exceptionsRes, 'topExceptions'),
+    };
+  }
+
+  /**
+   * Serie de latencia promedio por minuto y servicio en los últimos `minutes`. La consumen
+   * las tarjetas de salud (valor del minuto más reciente por servicio) y la gráfica del popup.
+   */
+  async getLatency(minutes: number): Promise<LatencyResponse> {
+    let points: LatencyPoint[] = [];
+    try {
+      const rows = await this.monitor.queryMinutes(LATENCY_TIMESERIES, minutes);
+      points = rows.map((r) => ({
+        timestamp: String(r.timestamp ?? ''),
+        service: String(r.service ?? ''),
+        avgMs: this.num(r.avgMs),
+        p95Ms: this.num(r.p95Ms),
+        p99Ms: this.num(r.p99Ms),
+        requests: this.num(r.requests),
+      }));
+    } catch (e) {
+      this.logger.error(`Latencia falló: ${(e as Error).message}`);
+    }
+    return {
+      minutes,
+      generatedAt: new Date().toISOString(),
+      enabled: this.monitor.enabled,
+      points,
+    };
+  }
+
+  /** Flujo de eventos entre microservicios (generados/recibidos/fallidos) desde App Insights. */
+  async getEventFlow(minutes: number): Promise<EventFlowResponse> {
+    const [pub, rec, fail] = await Promise.allSettled([
+      this.monitor.queryMinutes(EVENTS_PUBLISHED, minutes),
+      this.monitor.queryMinutes(EVENTS_RECEIVED, minutes),
+      this.monitor.queryMinutes(EVENTS_FAILED, minutes),
+    ]);
+    const safe = (r: PromiseSettledResult<KqlRow[]>) =>
+      r.status === 'fulfilled' ? r.value : [];
+    return {
+      minutes,
+      generatedAt: new Date().toISOString(),
+      enabled: this.monitor.enabled,
+      published: safe(pub),
+      received: safe(rec),
+      failed: safe(fail),
     };
   }
 
